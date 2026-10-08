@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Учёт инсталляторов</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f5f6f8;--card:#fff;--tx:#1b1f27;--mut:#6b7280;--bd:#e2e5ea;--ac:#2563eb;--ac2:#16a34a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14161a;--card:#1d2026;--tx:#e8eaee;--mut:#9aa1ad;--bd:#2d323b;--ac:#60a5fa;--ac2:#4ade80}}
+:root[data-theme="dark"]{--bg:#14161a;--card:#1d2026;--tx:#e8eaee;--mut:#9aa1ad;--bd:#2d323b;--ac:#60a5fa;--ac2:#4ade80}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px}
+.w{max-width:1100px;margin:0 auto}
+h1{font-size:22px;margin:0 0 14px}h2{font-size:16px;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:3px}
+input,select,button{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:7px 9px}
+button{cursor:pointer}button.p{background:var(--ac);color:#fff;border-color:var(--ac)}
+.sc{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:640px}
+th,td{padding:5px 6px;border-bottom:1px solid var(--bd);text-align:center;white-space:nowrap}
+th{font-size:12px;color:var(--mut);font-weight:600}
+td input,td select{width:100%;min-width:60px;padding:5px;background:transparent;border-color:transparent;text-align:center}
+td input:hover,td input:focus,td select:hover{border-color:var(--bd);background:var(--bg)}
+td input[type=number]{width:70px}
+tfoot td,.tot td{font-weight:700}
+.sum{color:var(--ac2);font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.pr{display:flex;flex-direction:column;font-size:12px;color:var(--mut)}.pr input{width:100%}
+.big{font-size:24px;font-weight:700;color:var(--ac2)}
+.tabs button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.ch{position:relative;height:300px}
+.x{color:#dc2626;border:none;background:none;font-size:18px;padding:0 6px}
+</style></head><body><div class="w">
+<h1>🛠 Учёт инсталляторов</h1>
+
+<div class="card"><h2>Цены услуг (можно менять)</h2>
+<div class="grid" id="prices"></div></div>
+
+<div class="card"><h2>Фильтр</h2>
+<div class="row">
+<label>Инсталлятор<select id="fi"></select></label>
+<label>С даты<input type="date" id="fa"></label>
+<label>По дату<input type="date" id="fb"></label>
+<button id="fr">Сбросить</button>
+<div style="margin-left:auto;text-align:right"><div style="font-size:12px;color:var(--mut)">Итого к оплате</div><div class="big" id="grand">0</div></div>
+</div></div>
+
+<div class="card"><h2>Итоги по инсталляторам</h2>
+<div class="sc"><table id="sum"></table></div></div>
+
+<div class="card"><div class="row" style="justify-content:space-between;margin-bottom:8px">
+<h2 style="margin:0">График</h2>
+<div class="tabs"><button data-m="cnt" class="on">Количество</button> <button data-m="pay">Оплата, ₸</button></div></div>
+<div class="ch"><canvas id="cv"></canvas></div></div>
+
+<div class="card"><div class="row" style="justify-content:space-between;margin-bottom:8px">
+<h2 style="margin:0">Записи (редактируются прямо в таблице)</h2>
+<button class="p" id="add">+ Добавить запись</button></div>
+<div class="sc"><table id="tb"></table></div></div>
+</div>
+<script>
+const NAMES=["Ершов А","Рашитбек Д","Аскаров"];
+const F=[["orders","Наряды"],["inst","Установки"],["repl","Замены"],["rem","Снятие"],["call","Вызов"]];
+const PR=[["inst","Установка",7000],["repl","Замена",3000],["call","Вызов инсталлятора",1000],["rem","Снятие",500]];
+const COL={inst:"#2563eb",repl:"#f59e0b",call:"#8b5cf6",rem:"#ef4444",orders:"#64748b"};
+let S={prices:{},rows:[]};
+PR.forEach(p=>S.prices[p[0]]=p[2]);
+const today=new Date().toISOString().slice(0,10);
+S.rows=[{d:today,n:NAMES[0],orders:5,inst:3,repl:1,rem:1,call:1},{d:today,n:NAMES[1],orders:4,inst:2,repl:1,rem:0,call:1},{d:today,n:NAMES[2],orders:3,inst:2,repl:0,rem:1,call:0}];
+try{const s=localStorage.getItem("inst_v1");if(s)S=JSON.parse(s)}catch(e){}
+const save=()=>{try{localStorage.setItem("inst_v1",JSON.stringify(S))}catch(e){}};
+const fmt=n=>Math.round(n).toLocaleString("ru-RU");
+const pay=r=>(r.inst||0)*S.prices.inst+(r.repl||0)*S.prices.repl+(r.call||0)*S.prices.call+(r.rem||0)*S.prices.rem;
+const $=id=>document.getElementById(id);
+let mode="cnt",chart;
+const flt={n:"",a:"",b:""};
+const vis=()=>S.rows.map((r,i)=>({r,i})).filter(({r})=>(!flt.n||r.n===flt.n)&&(!flt.a||r.d>=flt.a)&&(!flt.b||r.d<=flt.b));
+
+$("prices").innerHTML=PR.map(p=>`<label class="pr">${p[1]}, ₸<input type="number" min="0" data-p="${p[0]}"></label>`).join("");
+document.querySelectorAll("[data-p]").forEach(el=>{el.value=S.prices[el.dataset.p];el.oninput=()=>{S.prices[el.dataset.p]=+el.value||0;save();render()}});
+$("fi").innerHTML='<option value="">Все</option>'+NAMES.map(n=>`<option>${n}</option>`).join("");
+$("fi").onchange=e=>{flt.n=e.target.value;render()};
+$("fa").onchange=e=>{flt.a=e.target.value;render()};
+$("fb").onchange=e=>{flt.b=e.target.value;render()};
+$("fr").onclick=()=>{flt.n=flt.a=flt.b="";$("fi").value=$("fa").value=$("fb").value="";render()};
+$("add").onclick=()=>{S.rows.push({d:today,n:flt.n||NAMES[0],orders:0,inst:0,repl:0,rem:0,call:0});save();render()};
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{mode=b.dataset.m;document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("on",x===b));drawChart()});
+
+function totals(){
+  const t={};NAMES.forEach(n=>t[n]={orders:0,inst:0,repl:0,rem:0,call:0,pay:0});
+  vis().forEach(({r})=>{const o=t[r.n];if(!o)return;F.forEach(f=>o[f[0]]+=+r[f[0]]||0);o.pay+=pay(r)});
+  return t;
+}
+function render(){
+  const t=totals();
+  const names=flt.n?[flt.n]:NAMES;
+  let h="<tr><th style='text-align:left'>Инсталлятор</th>"+F.map(f=>`<th>${f[1]}</th>`).join("")+"<th>К оплате, ₸</th></tr>";
+  const g={pay:0};F.forEach(f=>g[f[0]]=0);
+  names.forEach(n=>{const o=t[n];h+=`<tr><td style="text-align:left">${n}</td>`+F.map(f=>`<td>${o[f[0]]}</td>`).join("")+`<td class="sum">${fmt(o.pay)}</td></tr>`;F.forEach(f=>g[f[0]]+=o[f[0]]);g.pay+=o.pay});
+  h+="<tr class='tot'><td style='text-align:left'>ИТОГО</td>"+F.map(f=>`<td>${g[f[0]]}</td>`).join("")+`<td class="sum">${fmt(g.pay)}</td></tr>`;
+  $("sum").innerHTML=h;$("grand").textContent=fmt(g.pay)+" ₸";
+  let b="<thead><tr><th>Дата</th><th>Инсталлятор</th>"+F.map(f=>`<th>${f[1]}</th>`).join("")+"<th>Сумма, ₸</th><th></th></tr></thead><tbody>";
+  vis().sort((x,y)=>y.r.d.localeCompare(x.r.d)).forEach(({r,i})=>{
+    b+=`<tr><td><input type="date" value="${r.d}" data-i="${i}" data-k="d"></td><td><select data-i="${i}" data-k="n">${NAMES.map(n=>`<option${n===r.n?" selected":""}>${n}</option>`).join("")}</select></td>`+
+    F.map(f=>`<td><input type="number" min="0" value="${r[f[0]]}" data-i="${i}" data-k="${f[0]}"></td>`).join("")+
+    `<td class="sum" id="s${i}">${fmt(pay(r))}</td><td><button class="x" data-del="${i}" title="Удалить">×</button></td></tr>`});
+  $("tb").innerHTML=b+"</tbody>";
+  $("tb").querySelectorAll("[data-k]").forEach(el=>el.onchange=()=>{const r=S.rows[el.dataset.i],k=el.dataset.k;r[k]=(k==="d"||k==="n")?el.value:Math.max(0,+el.value||0);save();render()});
+  $("tb").querySelectorAll("[data-del]").forEach(el=>el.onclick=()=>{if(confirm("Удалить запись?")){S.rows.splice(+el.dataset.del,1);save();render()}});
+  drawChart();
+}
+function drawChart(){
+  const t=totals(),names=flt.n?[flt.n]:NAMES;
+  const ks=mode==="cnt"?F:PR.map(p=>[p[0],p[1]]);
+  const ds=ks.map(([k,l])=>({label:l,backgroundColor:COL[k],borderRadius:4,
+    data:names.map(n=>mode==="cnt"?t[n][k]:vis().filter(({r})=>r.n===n).reduce((s,{r})=>s+(r[k]||0)*S.prices[k],0))}));
+  if(chart)chart.destroy();
+  const css=getComputedStyle(document.documentElement),tc=css.getPropertyValue("--tx").trim()||"#888",gc=css.getPropertyValue("--bd").trim()||"#ddd";
+  chart=new Chart($("cv"),{type:"bar",data:{labels:names,datasets:ds},options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:tc}}},
+    scales:{x:{stacked:mode==="pay",ticks:{color:tc},grid:{color:gc}},y:{stacked:mode==="pay",beginAtZero:true,ticks:{color:tc},grid:{color:gc}}}}});
+}
+render();
+</script></body></html>
